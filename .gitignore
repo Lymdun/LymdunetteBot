@@ -1,0 +1,64 @@
+# Visual Studio files and folders
+.vs/
+*.user
+*.userosscache
+*.sln.docstates
+
+# Visual Studio Code folders
+.vscode/
+
+# Build output
+[Dd]ebug/
+[Dd]ebugPublic/
+[Rr]elease/
+[Rr]eleases/
+x64/
+x86/
+build/
+bld/
+[Bb]in/
+[Oo]bj/
+[Oo]ut/
+msbuild.log
+msbuild.err
+msbuild.wrn
+
+# NuGet files
+*.nuget.props
+*.nuget.targets
+packages/
+
+# User-specific configuration files
+appsettings.Development.json
+appsettings.Production.json
+
+# Log files
+*.log
+
+# Temporary files
+[Tt]emp/
+[Tt]mp/
+
+# System files
+.DS_Store
+Thumbs.db
+
+# Discord bot specific files
+.env
+config.json
+token.txt
+
+# No clue
+application-commands/
+
+# Other files and folders to ignore
+*.swp
+*.*~
+project.lock.json
+.project
+.idea/
+*.sublime-workspace
+
+# Plugins
+*.exe
+libsodium.dll
