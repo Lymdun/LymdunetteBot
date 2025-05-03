@@ -7,7 +7,7 @@ using Disqord.Rest;
 namespace HidamariBot.Services;
 
 public class MemberLeaveService : DiscordBotService {
-    const ulong NOTIFICATION_CHANNEL_ID = 830851922889539644;
+    const ulong NOTIFICATION_CHANNEL_ID = 1368280558203043941;
     const string IMAGE_PATH = "./resources/leave.jpg";
 
     protected override ValueTask OnReady(ReadyEventArgs e) {
@@ -23,7 +23,7 @@ public class MemberLeaveService : DiscordBotService {
     async Task SendLeaveNotificationAsync(Snowflake guildId, IUser user) {
         try {
             var message = new LocalMessage()
-                .WithContent($"{Mention.User(user.Id)} dans le wagon le non-KJ");
+                .WithContent($"{Mention.User(user.Id)} a été déporté !");
 
             if (File.Exists(IMAGE_PATH)) {
                 await using (var fs = new FileStream(IMAGE_PATH, FileMode.Open, FileAccess.Read)) {
