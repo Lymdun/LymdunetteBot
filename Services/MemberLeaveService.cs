@@ -8,7 +8,7 @@ namespace HidamariBot.Services;
 
 public class MemberLeaveService : DiscordBotService {
     const ulong NOTIFICATION_CHANNEL_ID = 1368280558203043941;
-    const string IMAGE_PATH = "./resources/leave.jpg";
+    const string IMAGE_PATH = "./resources/leave.png";
 
     protected override ValueTask OnReady(ReadyEventArgs e) {
         Logger.LogInformation("MemberLeaveService Ready fired!");
