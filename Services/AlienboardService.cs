@@ -7,10 +7,10 @@ using Qommon;
 
 namespace HidamariBot.Services;
 
-public class AlienboardService : DiscordBotService {
-    const ulong CHANNEL_ID = 1368280558203043941;
+public class GayboardService : DiscordBotService {
+    const ulong CHANNEL_ID = 1368374125013237851;
     const ushort MIN_REACTIONS_REQUIRED = 5;
-    static readonly IEmoji DETECTABLE_EMOTE = new LocalEmoji("👽");
+    static readonly IEmoji DETECTABLE_EMOTE = new LocalEmoji("🏳️‍🌈");
 
     protected override async ValueTask OnReactionAdded(ReactionAddedEventArgs e) {
         var message = await Client.FetchMessageAsync(e.ChannelId, e.MessageId) as IUserMessage;
@@ -36,7 +36,7 @@ public class AlienboardService : DiscordBotService {
         string contentString = GetMessageLink(guildId, message);
 
         if (oldMessages.Any(x => x.Content.Equals(contentString))) {
-            Logger.LogWarning("Failed to post this alien message as it was already posted");
+            Logger.LogWarning("Failed to post this gay message as it was already posted");
             return true;
         }
 
@@ -65,7 +65,7 @@ public class AlienboardService : DiscordBotService {
             Footer = new LocalEmbedFooter {
                 Text = TimeZoneInfo.ConvertTime(message.CreatedAt(), SchedulerService.GetTimeZoneInfo())
                     .ToString("dd/MM/yyyy HH:mm"),
-                IconUrl = "https://ichef.bbci.co.uk/ace/standard/976/cpsprodpb/D6B0/production/_95806945_gettyimages-590147780.jpg"
+                IconUrl = "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8a/LGBT_Rainbow_Flag.png/800px-LGBT_Rainbow_Flag.png"
             }
         };
 
