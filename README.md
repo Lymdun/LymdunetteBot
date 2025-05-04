@@ -1,4 +1,4 @@
-﻿# Custom Reversed Server Discord Bot
+﻿# Custom Lymdunistan Server Discord Bot
 
 ## Requirements (Windows only)
 - FFmpeg  

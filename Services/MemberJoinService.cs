@@ -7,11 +7,8 @@ using Disqord.Rest;
 namespace HidamariBot.Services;
 
 public class MemberJoinService : DiscordBotService {
-    const ulong NOTIFICATION_CHANNEL_ID = 1203052960712622110;
+    const ulong NOTIFICATION_CHANNEL_ID = 1368365834166075512;
     const string IMAGE_PATH = "./resources/chezlymdun.png";
-
-    const string QUESTIONNAIRE_MESSAGE_PATH =
-        "https://discord.com/channels/450280270654865439/1203052960712622110/1203439457248743425";
 
     protected override ValueTask OnReady(ReadyEventArgs e) {
         Logger.LogInformation("MemberJoinService Ready fired!");
@@ -27,7 +24,7 @@ public class MemberJoinService : DiscordBotService {
         try {
             var message = new LocalMessage()
                 .WithContent(
-                    $"{Mention.User(newMember.Id)} Bienvenue sur le reversed, pour passer la frontière il faut remplir le questionnaire {QUESTIONNAIRE_MESSAGE_PATH} 📋");
+                    $"{Mention.User(newMember.Id)} Bienvenue sur le Lymdunistan, ton VISA a été accepté !");
 
             if (File.Exists(IMAGE_PATH)) {
                 await using (var fs = new FileStream(IMAGE_PATH, FileMode.Open, FileAccess.Read)) {
