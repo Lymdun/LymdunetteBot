@@ -2,7 +2,7 @@
 using System.Diagnostics;
 using Disqord.Extensions.Voice;
 
-namespace HidamariBot.Audio;
+namespace LymdunetteBot.Audio;
 
 // Represents an audio source implementation that uses FFmpeg to produce
 // the Opus audio packets. The input stream can be any format

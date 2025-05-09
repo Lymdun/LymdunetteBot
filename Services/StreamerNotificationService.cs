@@ -6,7 +6,7 @@ using Disqord.Gateway;
 using Disqord.Rest;
 using Qmmands;
 
-namespace HidamariBot.Services;
+namespace LymdunetteBot.Services;
 
 public class StreamerNotificationService : DiscordBotService {
     readonly SemaphoreSlim _semaphore = new(1, 1);

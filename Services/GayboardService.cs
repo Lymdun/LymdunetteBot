@@ -5,7 +5,7 @@ using Disqord.Rest;
 using Microsoft.Extensions.Logging;
 using Qommon;
 
-namespace HidamariBot.Services;
+namespace LymdunetteBot.Services;
 
 public class GayboardService : DiscordBotService {
     const ulong CHANNEL_ID = 1368374125013237851;

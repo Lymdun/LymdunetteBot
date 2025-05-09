@@ -33,9 +33,6 @@
       <None Update="resources\makise_monday.webm">
         <CopyToOutputDirectory>Always</CopyToOutputDirectory>
       </None>
-      <None Update="resources\ohayo.mp4">
-        <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-      </None>
       <None Update="resources\chezlymdun.png">
         <CopyToOutputDirectory>Always</CopyToOutputDirectory>
       </None>

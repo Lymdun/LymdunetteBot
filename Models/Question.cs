@@ -1,6 +1,6 @@
 ﻿using Newtonsoft.Json;
 
-namespace HidamariBot.Models;
+namespace LymdunetteBot.Models;
 
 public class Questions {
     [JsonProperty("lastQuestionItemId")]

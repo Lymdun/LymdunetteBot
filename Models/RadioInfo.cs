@@ -1,6 +1,6 @@
 ﻿using System.Text.Json.Serialization;
 
-namespace HidamariBot.Models;
+namespace LymdunetteBot.Models;
 
 public class RadioInfo {
     [JsonPropertyName("main")] public MainInfo? Main { get; set; }

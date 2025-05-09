@@ -1,16 +1,16 @@
-﻿using Disqord;
+﻿using System.Text.Json;
+using System.Text.RegularExpressions;
+using Disqord;
 using Disqord.Bot.Hosting;
 using Disqord.Extensions.Voice;
 using Disqord.Gateway;
 using Disqord.Voice;
-using HidamariBot.Audio;
-using HidamariBot.Models;
+using LymdunetteBot.Audio;
+using LymdunetteBot.Models;
 using Microsoft.Extensions.Logging;
-using System.Text.Json;
-using System.Text.RegularExpressions;
 using Qmmands;
 
-namespace HidamariBot.Services;
+namespace LymdunetteBot.Services;
 
 public class AudioPlayerService : DiscordBotService {
     readonly SemaphoreSlim _semaphore = new(1, 1);

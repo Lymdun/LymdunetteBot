@@ -4,7 +4,7 @@ using Disqord.Gateway;
 using Microsoft.Extensions.Logging;
 using Disqord.Rest;
 
-namespace HidamariBot.Services;
+namespace LymdunetteBot.Services;
 
 public class MemberLeaveService : DiscordBotService {
     const ulong NOTIFICATION_CHANNEL_ID = 1368280558203043941;

@@ -1,14 +1,14 @@
 ﻿using Disqord;
 using Disqord.Bot.Commands.Application;
 using Disqord.Gateway;
-using HidamariBot.Models;
-using HidamariBot.Services;
+using LymdunetteBot.Models;
+using LymdunetteBot.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Qmmands;
 
-namespace HidamariBot.Modules;
+namespace LymdunetteBot.Modules;
 
-public class General : HidamariBotModuleBase {
+public class General : LymdunetteBotModuleBase {
     [SlashCommand("ping"), Description("Vérifiez si je suis bien là !")]
     public IResult Ping() => Response("Pong !");
 

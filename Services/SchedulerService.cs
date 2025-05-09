@@ -3,10 +3,10 @@ using Disqord;
 using Disqord.Bot.Hosting;
 using Disqord.Gateway;
 using Disqord.Rest;
-using HidamariBot.Models;
+using LymdunetteBot.Models;
 using Microsoft.Extensions.Logging;
 
-namespace HidamariBot.Services;
+namespace LymdunetteBot.Services;
 
 public class SchedulerService : DiscordBotService {
     const ulong CHANNEL_ID = 1368277691765227675;
@@ -40,9 +40,7 @@ public class SchedulerService : DiscordBotService {
                 }
 
                 try {
-                    if (isDailyWeekMeme)
-                        await SendDailyWeekMeme(stoppingToken);
-                    else
+                    if (!isDailyWeekMeme)
                         await SendDailyMemeIfApplicable(nextOccurrence.Value.DayOfWeek, stoppingToken);
                 } catch (Exception ex) {
                     Logger.LogError(ex, "Failure while sending meme");
@@ -69,11 +67,6 @@ public class SchedulerService : DiscordBotService {
                 Logger.LogInformation("No meme to send today");
                 break;
         }
-    }
-
-    async Task SendDailyWeekMeme(CancellationToken stoppingToken) {
-        await SendMeme(stoppingToken, Meme.DailyWeekMeme());
-        Logger.LogInformation("SendDailyWeekMeme fired!");
     }
 
     async Task SendMeme(CancellationToken stoppingToken, Meme meme) {

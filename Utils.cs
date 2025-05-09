@@ -1,4 +1,4 @@
-﻿namespace HidamariBot;
+﻿namespace LymdunetteBot;
 
 public static class Utils {
     static readonly Random random = new();

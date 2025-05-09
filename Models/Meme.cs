@@ -1,4 +1,4 @@
-﻿namespace HidamariBot.Models;
+﻿namespace LymdunetteBot.Models;
 
 public struct Meme {
     public string ImageUrl;
@@ -13,9 +13,5 @@ public struct Meme {
 
     public static Meme TuesdayMeme() {
         return new Meme("everybody.webm");
-    }
-
-    public static Meme DailyWeekMeme() {
-        return new Meme("ohayo.mp4");
     }
 }

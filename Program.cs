@@ -11,7 +11,7 @@ using Serilog;
 using Serilog.Events;
 using ILogger = Serilog.ILogger;
 
-namespace HidamariBot;
+namespace LymdunetteBot;
 
 public static class Program {
     const ulong OWNER_ID = 435044125033889793;
@@ -43,7 +43,7 @@ public static class Program {
                 x.Services.AddSingleton(typeof(ILogger<>), typeof(Logger<>));
             })
             .ConfigureServices(ConfigureServices)
-            .ConfigureDiscordBot<HidamariDiscordBot>((context, bot) => {
+            .ConfigureDiscordBot<LymdunetteDiscordBot>((context, bot) => {
                 bot.Token = context.Configuration["DISCORD_TOKEN"];
                 bot.ReadyEventDelayMode = ReadyEventDelayMode.Guilds;
                 bot.Status = UserStatus.Online;
