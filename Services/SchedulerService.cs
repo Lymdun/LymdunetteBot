@@ -14,6 +14,7 @@ public class SchedulerService : DiscordBotService {
 
     const string CRON_EXPRESSION = "0 12 * * MON,TUE";
     const string DAILY_WEEK_CRON_EXPRESSION = "59 5 * * MON-FRI";
+    const string HACHIMI_MICHI_MAMBO_CRON_EXPRESSION = "0 10 * * *";
 
     protected override ValueTask OnReady(ReadyEventArgs e) {
         Logger.LogInformation("SchedulerService Ready fired!");
@@ -23,14 +24,19 @@ public class SchedulerService : DiscordBotService {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken) {
         var cronExpression = CronExpression.Parse(CRON_EXPRESSION);
         var dailyWeekCronExpression = CronExpression.Parse(DAILY_WEEK_CRON_EXPRESSION);
+        var hachimiMichiMamboCronExpression = CronExpression.Parse(HACHIMI_MICHI_MAMBO_CRON_EXPRESSION);
 
         while (!stoppingToken.IsCancellationRequested) {
             DateTimeOffset now = DateTimeOffset.UtcNow;
 
             DateTimeOffset? nextMemeTime  = cronExpression.GetNextOccurrence(now, frenchTimeZone);
             DateTimeOffset? nextDailyWeekOccurrence = dailyWeekCronExpression.GetNextOccurrence(now, frenchTimeZone);
+            DateTimeOffset? nextHachimiMichiMamboOccurrence = hachimiMichiMamboCronExpression.GetNextOccurrence(now, frenchTimeZone);
 
-            (DateTimeOffset? nextOccurrence, bool isDailyWeekMeme) = GetNextOccurrence(nextMemeTime, nextDailyWeekOccurrence);
+            DateTimeOffset? nextOccurrence = GetNextOccurrence(
+                nextMemeTime,
+                nextDailyWeekOccurrence,
+                nextHachimiMichiMamboOccurrence);
 
             if (nextOccurrence.HasValue) {
                 TimeSpan delay = nextOccurrence.Value - now;
@@ -40,8 +46,14 @@ public class SchedulerService : DiscordBotService {
                 }
 
                 try {
-                    if (!isDailyWeekMeme)
+                    if (nextOccurrence == nextMemeTime) {
                         await SendDailyMemeIfApplicable(nextOccurrence.Value.DayOfWeek, stoppingToken);
+                    }
+
+                    if (nextOccurrence == nextHachimiMichiMamboOccurrence) {
+                        await SendMeme(stoppingToken, Meme.HachimiMichiMambo());
+                        Logger.LogInformation("SendHachimiMichiMambo fired!");
+                    }
                 } catch (Exception ex) {
                     Logger.LogError(ex, "Failure while sending meme");
                 }
@@ -84,16 +96,19 @@ public class SchedulerService : DiscordBotService {
         }
     }
 
-    static (DateTimeOffset? occurrence, bool isDailyWeekMeme) GetNextOccurrence(
-        DateTimeOffset? nextMeme,
-        DateTimeOffset? nextDailyWeek) {
-        if (!nextMeme.HasValue && !nextDailyWeek.HasValue) return (null, false);
-        if (!nextMeme.HasValue) return (nextDailyWeek, true);
-        if (!nextDailyWeek.HasValue) return (nextMeme, false);
+    static DateTimeOffset? GetNextOccurrence(params DateTimeOffset?[] occurrences) {
+        DateTimeOffset? nextOccurrence = null;
 
-        return nextDailyWeek.Value < nextMeme.Value
-            ? (nextDailyWeek, true)
-            : (nextMeme, false);
+        foreach (DateTimeOffset? occurrence in occurrences) {
+            if (!occurrence.HasValue)
+                continue;
+
+            if (!nextOccurrence.HasValue || occurrence.Value < nextOccurrence.Value) {
+                nextOccurrence = occurrence;
+            }
+        }
+
+        return nextOccurrence;
     }
 
     public static TimeZoneInfo GetTimeZoneInfo() => frenchTimeZone;
