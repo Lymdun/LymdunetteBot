@@ -10,8 +10,8 @@
 
     <ItemGroup>
       <PackageReference Include="Cronos" Version="0.13.0" />
-      <PackageReference Include="Disqord.Bot" Version="1.0.0-alpha5.77" />
-      <PackageReference Include="Disqord.Extensions.Voice" Version="1.0.0-alpha5.77" />
+      <PackageReference Include="Disqord.Bot" Version="1.0.0-alpha5.113" />
+      <PackageReference Include="Disqord.Extensions.Voice" Version="1.0.0-alpha5.113" />
       <PackageReference Include="DotNetEnv" Version="3.2.0" />
       <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.9" />
       <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
