@@ -18,4 +18,8 @@ public struct Meme {
     public static Meme HachimiMichiMambo() {
         return new Meme("hachimi_michi_mambo.webm");
     }
+
+    public static Meme Burnice() {
+        return new Meme("burnice.mp4");
+    }
 }
