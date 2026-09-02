@@ -215,10 +215,6 @@ public class SchedulerService : DiscordBotService {
         }
 
         var message = new LocalMessage();
-        if (meme.Content != null) {
-            message.WithContent(meme.Content);
-        }
-
         await using (var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read)) {
             message.WithAttachments(LocalAttachment.File(fs));
             await Bot.SendMessageAsync(CHANNEL_ID, message, cancellationToken: stoppingToken);

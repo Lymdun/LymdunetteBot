@@ -2,11 +2,9 @@
 
 public struct Meme {
     public string ImageUrl;
-    public string? Content;
 
-    Meme(string imageUrl, string? content = null) {
+    Meme(string imageUrl) {
         this.ImageUrl = imageUrl;
-        this.Content = content;
     }
 
     public static Meme MondayMeme() {
@@ -26,6 +24,6 @@ public struct Meme {
     }
 
     public static Meme September() {
-        return new Meme("september.webm", "SEPTEMBER WOOHOO");
+        return new Meme("september.webm");
     }
 }
