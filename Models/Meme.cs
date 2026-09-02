@@ -22,4 +22,8 @@ public struct Meme {
     public static Meme Burnice() {
         return new Meme("burnice.mp4");
     }
+
+    public static Meme September() {
+        return new Meme("september.webm");
+    }
 }

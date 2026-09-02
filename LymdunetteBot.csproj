@@ -39,6 +39,9 @@
       <None Update="resources\burnice.mp4">
         <CopyToOutputDirectory>Always</CopyToOutputDirectory>
       </None>
+      <None Update="resources\september.webm">
+        <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      </None>
       <None Update="resources\chezlymdun.png">
         <CopyToOutputDirectory>Always</CopyToOutputDirectory>
       </None>

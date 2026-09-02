@@ -20,6 +20,7 @@ public class SchedulerService : DiscordBotService {
     const string DAILY_WEEK_CRON_EXPRESSION = "59 5 * * MON-FRI";
     const string HACHIMI_MICHI_MAMBO_CRON_EXPRESSION = "0 10 * * *";
     const string BURNICE_HEAT_WAVE_CRON_EXPRESSION = "0 9 * * *";
+    const string SEPTEMBER_CRON_EXPRESSION = "0 14 * 9 *";
     const string VIGILANCE_API_URL = "https://data.smartidf.services/api/explore/v2.1/catalog/datasets/weatherref-france-vigilance-meteo-departement/records";
     const string VIGILANCE_QUERY = "phenomenon='canicule' and color_id >= 3 and domain_id in ('69','75')";
 
@@ -33,6 +34,7 @@ public class SchedulerService : DiscordBotService {
         var dailyWeekCronExpression = CronExpression.Parse(DAILY_WEEK_CRON_EXPRESSION);
         var hachimiMichiMamboCronExpression = CronExpression.Parse(HACHIMI_MICHI_MAMBO_CRON_EXPRESSION);
         var burniceHeatWaveCronExpression = CronExpression.Parse(BURNICE_HEAT_WAVE_CRON_EXPRESSION);
+        var septemberCronExpression = CronExpression.Parse(SEPTEMBER_CRON_EXPRESSION);
 
         while (!stoppingToken.IsCancellationRequested) {
             DateTimeOffset now = DateTimeOffset.UtcNow;
@@ -41,12 +43,14 @@ public class SchedulerService : DiscordBotService {
             DateTimeOffset? nextDailyWeekOccurrence = dailyWeekCronExpression.GetNextOccurrence(now, frenchTimeZone);
             DateTimeOffset? nextHachimiMichiMamboOccurrence = hachimiMichiMamboCronExpression.GetNextOccurrence(now, frenchTimeZone);
             DateTimeOffset? nextBurniceHeatWaveOccurrence = burniceHeatWaveCronExpression.GetNextOccurrence(now, frenchTimeZone);
+            DateTimeOffset? nextSeptemberOccurrence = septemberCronExpression.GetNextOccurrence(now, frenchTimeZone);
 
             DateTimeOffset? nextOccurrence = GetNextOccurrence(
                 nextMemeTime,
                 nextDailyWeekOccurrence,
                 nextHachimiMichiMamboOccurrence,
-                nextBurniceHeatWaveOccurrence);
+                nextBurniceHeatWaveOccurrence,
+                nextSeptemberOccurrence);
 
             if (nextOccurrence.HasValue) {
                 TimeSpan delay = nextOccurrence.Value - now;
@@ -67,6 +71,11 @@ public class SchedulerService : DiscordBotService {
 
                     if (nextOccurrence == nextBurniceHeatWaveOccurrence) {
                         await SendBurniceIfHeatWave(nextOccurrence.Value, stoppingToken);
+                    }
+
+                    if (nextOccurrence == nextSeptemberOccurrence) {
+                        await SendMeme(stoppingToken, Meme.September());
+                        Logger.LogInformation("SendSeptember fired!");
                     }
                 } catch (Exception ex) {
                     Logger.LogError(ex, "Failure while running scheduled task");
