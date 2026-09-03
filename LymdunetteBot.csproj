@@ -53,6 +53,7 @@
       </None>
     </ItemGroup>
     <ItemGroup>
+      <Compile Remove="LymdunetteBot.Tests\**\*.cs" />
       <Folder Include="resources\" />
     </ItemGroup>
 
