@@ -16,14 +16,17 @@ public class LeaderboardNotificationService : DiscordBotService {
     const string LIVEBENCH_URL = "https://livebench.ai/";
     const string DEEPSWE_URL = "https://deepswe.datacurve.ai/";
     const string DEEPSWE_DATA_URL = "https://deepswe.datacurve.ai/artifacts/v1.1/leaderboard-live.json";
-    const int DEFAULT_POLL_INTERVAL_MINUTES = 30;
+    const int POLL_INTERVAL_MINUTES = 30;
     const int MAX_NOTIFICATIONS_PER_POLL = 5;
 
     static readonly HttpClient httpClient = CreateHttpClient();
+    static readonly TimeSpan POLL_INTERVAL = TimeSpan.FromMinutes(POLL_INTERVAL_MINUTES);
+    static readonly string STATE_PATH = Path.Combine(
+        AppContext.BaseDirectory,
+        "data",
+        "leaderboard-monitor-state.json");
 
     readonly LiveBenchClient liveBenchClient = new(LIVEBENCH_URL, GetStringAsync);
-    readonly TimeSpan pollInterval = GetPollInterval();
-    readonly string statePath = GetStatePath();
 
     LeaderboardMonitorState state = new();
 
@@ -35,12 +38,12 @@ public class LeaderboardNotificationService : DiscordBotService {
             while (!stoppingToken.IsCancellationRequested) {
                 try {
                     await RunCheckCycleAsync(stoppingToken);
-                    await Task.Delay(pollInterval, stoppingToken);
+                    await Task.Delay(POLL_INTERVAL, stoppingToken);
                 } catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) {
                     break;
                 } catch (Exception ex) {
                     Logger.LogError(ex, "Leaderboard monitoring cycle failed");
-                    await Task.Delay(pollInterval, stoppingToken);
+                    await Task.Delay(POLL_INTERVAL, stoppingToken);
                 }
             }
         } catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) {
@@ -216,12 +219,12 @@ public class LeaderboardNotificationService : DiscordBotService {
     }
 
     async Task<LeaderboardMonitorState> LoadStateAsync(CancellationToken stoppingToken) {
-        if (!File.Exists(statePath)) {
+        if (!File.Exists(STATE_PATH)) {
             return new LeaderboardMonitorState();
         }
 
         try {
-            string json = await File.ReadAllTextAsync(statePath, stoppingToken);
+            string json = await File.ReadAllTextAsync(STATE_PATH, stoppingToken);
             return LeaderboardMonitorLogic.DeserializeState(json);
         } catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) {
             throw;
@@ -229,21 +232,21 @@ public class LeaderboardNotificationService : DiscordBotService {
             Logger.LogError(
                 ex,
                 "Could not read leaderboard monitor state from {StatePath}; current entries will be used as a new baseline",
-                statePath);
+                STATE_PATH);
             return new LeaderboardMonitorState();
         }
     }
 
     async Task SaveStateAsync(CancellationToken stoppingToken) {
-        string? directory = Path.GetDirectoryName(statePath);
+        string? directory = Path.GetDirectoryName(STATE_PATH);
         if (!string.IsNullOrWhiteSpace(directory)) {
             Directory.CreateDirectory(directory);
         }
 
-        string temporaryPath = statePath + ".tmp";
+        string temporaryPath = STATE_PATH + ".tmp";
         string json = JsonSerializer.Serialize(state, new JsonSerializerOptions { WriteIndented = true });
         await File.WriteAllTextAsync(temporaryPath, json, stoppingToken);
-        File.Move(temporaryPath, statePath, true);
+        File.Move(temporaryPath, STATE_PATH, true);
     }
 
     static async Task<string> GetStringAsync(string url, CancellationToken stoppingToken) {
@@ -264,22 +267,6 @@ public class LeaderboardNotificationService : DiscordBotService {
         };
         client.DefaultRequestHeaders.UserAgent.ParseAdd("LymdunetteBot/1.0 leaderboard-monitor");
         return client;
-    }
-
-    static TimeSpan GetPollInterval() {
-        string? value = Environment.GetEnvironmentVariable("LEADERBOARD_POLL_INTERVAL_MINUTES");
-        if (!int.TryParse(value, CultureInfo.InvariantCulture, out int minutes)) {
-            minutes = DEFAULT_POLL_INTERVAL_MINUTES;
-        }
-
-        return TimeSpan.FromMinutes(Math.Clamp(minutes, 1, 1440));
-    }
-
-    static string GetStatePath() {
-        string? configuredPath = Environment.GetEnvironmentVariable("LEADERBOARD_STATE_PATH");
-        return string.IsNullOrWhiteSpace(configuredPath)
-            ? Path.Combine(AppContext.BaseDirectory, "data", "leaderboard-monitor-state.json")
-            : Path.GetFullPath(configuredPath);
     }
 
     static string EscapeInlineCode(string value) => value.Replace("`", "'", StringComparison.Ordinal);
