@@ -6,3 +6,5 @@
 
 ## Installation
 Create a `.env` file in parent directory containing your `DISCORD_TOKEN` value.
+
+The leaderboard monitor checks LiveBench and DeepSWE every 30 minutes and stores its deduplication state in `data/leaderboard-monitor-state.json`. The Docker Compose configuration persists this directory across container rebuilds.
