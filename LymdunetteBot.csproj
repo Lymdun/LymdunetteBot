@@ -44,9 +44,6 @@
       </None>
     </ItemGroup>
     <ItemGroup>
-      <Compile Remove="Tests/**/*.cs" />
-    </ItemGroup>
-    <ItemGroup>
       <Folder Include="resources\" />
     </ItemGroup>
 
