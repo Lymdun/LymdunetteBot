@@ -42,7 +42,11 @@ jobs:
           # Publish must never package local credentials or persistent state.
           test ! -e "$RUNNER_TEMP/release/.env"
           test ! -e "$RUNNER_TEMP/release/data"
-          tar -czf "$RUNNER_TEMP/release.tar.gz" -C "$RUNNER_TEMP/release" .
+
+      - name: Build Docker image
+        run: |
+          docker build --pull --platform linux/amd64 \
+            --tag "lymdunettebot-cd:$GITHUB_SHA" "$RUNNER_TEMP/release"
 
       - name: Deploy production
         if: github.event_name == 'push'
@@ -65,11 +69,9 @@ jobs:
           printf '%s\n' "$DEPLOY_SSH_KEY" > "$ssh_dir/key"
           printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > "$ssh_dir/known_hosts"
           unset DEPLOY_SSH_KEY DEPLOY_KNOWN_HOSTS
-          checksum=$(sha256sum "$RUNNER_TEMP/release.tar.gz" | cut -d ' ' -f 1)
-          ssh -T -i "$ssh_dir/key" \
+          docker save "lymdunettebot-cd:$GITHUB_SHA" | gzip | ssh -T -i "$ssh_dir/key" \
             -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$ssh_dir/known_hosts" \
             -o ConnectTimeout=15 -o ServerAliveInterval=15 -o ServerAliveCountMax=8 \
-            root@193.168.147.68 "deploy $GITHUB_SHA $checksum" \
-            < "$RUNNER_TEMP/release.tar.gz"
+            root@193.168.147.68 "deploy $GITHUB_SHA"
           echo "Deployed $GITHUB_SHA to production." >> "$GITHUB_STEP_SUMMARY"
