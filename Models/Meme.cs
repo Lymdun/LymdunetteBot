@@ -14,4 +14,16 @@ public struct Meme {
     public static Meme TuesdayMeme() {
         return new Meme("everybody.webm");
     }
+
+    public static Meme HachimiMichiMambo() {
+        return new Meme("hachimi_michi_mambo.webm");
+    }
+
+    public static Meme Burnice() {
+        return new Meme("burnice.mp4");
+    }
+
+    public static Meme September() {
+        return new Meme("september.webm");
+    }
 }
