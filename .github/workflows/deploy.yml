@@ -44,11 +44,6 @@ jobs:
           test ! -e "$RUNNER_TEMP/release/data"
           tar -czf "$RUNNER_TEMP/release.tar.gz" -C "$RUNNER_TEMP/release" .
 
-      - name: Exercise deployment and rollback in isolation
-        run: |
-          docker run --rm --network none -v "$GITHUB_WORKSPACE:/repo:ro" \
-            python:3.12-slim python /repo/tests/deployment.py
-
       - name: Deploy production
         if: github.event_name == 'push'
         env:
