@@ -1,0 +1,11 @@
+.env
+.env.*
+data
+.git
+.github
+.idea
+.vs
+**/*.key
+**/*.pem
+**/id_rsa*
+**/id_ed25519*
