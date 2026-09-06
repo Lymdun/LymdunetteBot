@@ -52,6 +52,7 @@ jobs:
         if: github.event_name == 'push'
         env:
           GH_TOKEN: ${{ github.token }}
+          DEPLOY_HOST: ${{ secrets.LYMDUNETTEBOT_DEPLOY_HOST }}
           DEPLOY_SSH_KEY: ${{ secrets.LYMDUNETTEBOT_DEPLOY_SSH_KEY }}
           DEPLOY_KNOWN_HOSTS: ${{ secrets.LYMDUNETTEBOT_DEPLOY_KNOWN_HOSTS }}
         run: |
@@ -61,6 +62,7 @@ jobs:
             echo "Skipping superseded revision $GITHUB_SHA."
             exit 0
           fi
+          test -n "$DEPLOY_HOST"
           test -n "$DEPLOY_SSH_KEY"
           test -n "$DEPLOY_KNOWN_HOSTS"
           umask 077
@@ -73,5 +75,5 @@ jobs:
             -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$ssh_dir/known_hosts" \
             -o ConnectTimeout=15 -o ServerAliveInterval=15 -o ServerAliveCountMax=8 \
-            root@193.168.147.68 "deploy $GITHUB_SHA"
+            "root@$DEPLOY_HOST" "deploy $GITHUB_SHA"
           echo "Deployed $GITHUB_SHA to production." >> "$GITHUB_STEP_SUMMARY"

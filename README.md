@@ -21,8 +21,9 @@ The workflow uses these repository Actions secrets:
 
 | Secret | Value |
 | --- | --- |
+| `LYMDUNETTEBOT_DEPLOY_HOST` | VPS hostname or IP address |
 | `LYMDUNETTEBOT_DEPLOY_SSH_KEY` | Dedicated Ed25519 private key for this repository's CD |
-| `LYMDUNETTEBOT_DEPLOY_KNOWN_HOSTS` | Verified `193.168.147.68 ssh-ed25519 ...` host-key entry |
+| `LYMDUNETTEBOT_DEPLOY_KNOWN_HOSTS` | Verified `<deploy-host> ssh-ed25519 ...` host-key entry matching the deployment host |
 
 The private key stays out of Git. Obtain the public host key through a trusted
 administrator connection; the workflow uses strict SSH host verification.
@@ -44,7 +45,7 @@ restrict,command="/usr/local/sbin/lymdunettebot-cd" ssh-ed25519 <public-key> lym
 
 The key permits only `check` and `deploy <commit SHA>`, with shell access and
 forwarding disabled. Verify it using `ssh -i <private-key> -o IdentitiesOnly=yes
-root@193.168.147.68 check`. To rotate it, authorize a replacement public key,
+root@<deploy-host> check`. To rotate it, authorize a replacement public key,
 update the private-key secret, verify access, then remove the old key entry.
 
 ### Startup and recovery
