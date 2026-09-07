@@ -6,3 +6,8 @@
     restart: unless-stopped
     env_file:
       - .env
+    volumes:
+      - steam-news-data:/app/data
+
+volumes:
+  steam-news-data:

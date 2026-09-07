@@ -47,6 +47,7 @@ Thumbs.db
 .env
 config.json
 token.txt
+/data/
 
 # No clue
 application-commands/
