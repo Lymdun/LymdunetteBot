@@ -11,12 +11,13 @@ The Docker image includes the .NET 10 runtime, libsodium, and FFmpeg.
 ## Installation
 Create a `.env` file in parent directory containing your `DISCORD_TOKEN` value.
 
+
 The leaderboard monitor checks LiveBench and DeepSWE every 30 minutes and stores its deduplication state in `data/leaderboard-monitor-state.json`. The Docker Compose configuration persists this directory across container rebuilds.
 
 ## Automatic deployment
 
-GitHub Actions publishes the .NET 8 Linux release and builds its Docker image on
-pull requests and pushes to `main` or `master`. Only pushes deploy: the runner
+GitHub Actions publishes the .NET 8 Linux release and builds its Docker image only
+on pushes to `main` or `master`. The runner
 streams `docker save | gzip` over SSH, the VPS imports it with `docker load`, and
 Compose recreates only `lymdunette-bot`. The VPS does not compile or build images.
 Runs are serialized, and superseded branch revisions are skipped.
@@ -70,3 +71,4 @@ docker compose --project-name lymdunbot \
 
 Check the bot's logs afterward. Keep the Compose override in manual operations,
 and periodically remove old images once they are no longer needed for recovery.
+

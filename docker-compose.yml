@@ -7,4 +7,7 @@
     env_file:
       - .env
     volumes:
-      - ./data:/app/data
+      - steam-news-data:/app/data
+
+volumes:
+  steam-news-data:
