@@ -63,9 +63,11 @@ public static class Program {
         services.AddInteractivityExtension();
         services.AddVoiceExtension();
         services.AddLogging();
+        services.AddSingleton(new HttpClient { Timeout = TimeSpan.FromSeconds(5) });
+        services.AddSingleton<Services.XLinkConverter>();
     }
 
     static GatewayIntents GetDiscordIntents() {
-        return (GatewayIntents.Guilds | GatewayIntents.Integrations | GatewayIntents.Members | GatewayIntents.GuildReactions | GatewayIntents.MessageContent | GatewayIntents.VoiceStates);
+        return (GatewayIntents.Guilds | GatewayIntents.Integrations | GatewayIntents.Members | GatewayIntents.GuildReactions | GatewayIntents.GuildMessages | GatewayIntents.MessageContent | GatewayIntents.VoiceStates);
     }
 }

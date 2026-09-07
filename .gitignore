@@ -35,6 +35,9 @@ appsettings.Production.json
 # Log files
 *.log
 
+# Persistent runtime state
+/data/
+
 # Temporary files
 [Tt]emp/
 [Tt]mp/

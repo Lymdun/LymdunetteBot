@@ -1,0 +1,79 @@
+name: Build and deploy
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+permissions:
+  contents: read
+
+# Never interrupt a deployment halfway through replacing the container.
+concurrency:
+  group: lymdunettebot-${{ github.event_name == 'push' && 'production' || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-dotnet@2016bd2012dba4e32de620c46fe006a3ac9f0602 # v5.0.1
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Check deployment script
+        run: |
+          bash -n scripts/deploy-production.sh
+          shellcheck scripts/deploy-production.sh
+
+      - name: Publish Linux release
+        run: |
+          dotnet publish LymdunetteBot.csproj --configuration Release \
+            --runtime linux-x64 --self-contained false \
+            -p:UseAppHost=false -p:ContinuousIntegrationBuild=true \
+            --output "$RUNNER_TEMP/release"
+          cp Dockerfile .dockerignore "$RUNNER_TEMP/release/"
+          # Publish must never package local credentials or persistent state.
+          test ! -e "$RUNNER_TEMP/release/.env"
+          test ! -e "$RUNNER_TEMP/release/data"
+
+      - name: Build Docker image
+        run: |
+          docker build --pull --platform linux/amd64 \
+            --tag "lymdunettebot-cd:$GITHUB_SHA" "$RUNNER_TEMP/release"
+
+      - name: Deploy production
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOY_HOST: ${{ secrets.LYMDUNETTEBOT_DEPLOY_HOST }}
+          DEPLOY_SSH_KEY: ${{ secrets.LYMDUNETTEBOT_DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.LYMDUNETTEBOT_DEPLOY_KNOWN_HOSTS }}
+        run: |
+          # A queued run must not roll a branch back after a newer push.
+          current_sha=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/$GITHUB_REF_NAME" --jq .object.sha)
+          if [[ "$current_sha" != "$GITHUB_SHA" ]]; then
+            echo "Skipping superseded revision $GITHUB_SHA."
+            exit 0
+          fi
+          test -n "$DEPLOY_HOST"
+          test -n "$DEPLOY_SSH_KEY"
+          test -n "$DEPLOY_KNOWN_HOSTS"
+          umask 077
+          ssh_dir=$(mktemp -d "$RUNNER_TEMP/deploy-ssh.XXXXXX")
+          trap 'rm -rf -- "$ssh_dir"' EXIT
+          printf '%s\n' "$DEPLOY_SSH_KEY" > "$ssh_dir/key"
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > "$ssh_dir/known_hosts"
+          unset DEPLOY_SSH_KEY DEPLOY_KNOWN_HOSTS
+          docker save "lymdunettebot-cd:$GITHUB_SHA" | gzip | ssh -T -i "$ssh_dir/key" \
+            -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$ssh_dir/known_hosts" \
+            -o ConnectTimeout=15 -o ServerAliveInterval=15 -o ServerAliveCountMax=8 \
+            "root@$DEPLOY_HOST" "deploy $GITHUB_SHA"
+          echo "Deployed $GITHUB_SHA to production." >> "$GITHUB_STEP_SUMMARY"
