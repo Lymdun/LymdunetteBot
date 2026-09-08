@@ -51,6 +51,8 @@ internal sealed class SteamNewsTracker(HttpClient httpClient, string statePath) 
 
         while (true) {
             string url = $"{NEWS_URL}?appid={APP_ID}&count={PAGE_SIZE}&maxlength=1000&feeds={ANNOUNCEMENTS_FEED}&l=french&format=json";
+            // Steam can serve stale news despite no-cache headers; vary the URL on each request.
+            url += $"&_={DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}";
             if (endDate.HasValue)
                 url += $"&enddate={endDate.Value}";
 
