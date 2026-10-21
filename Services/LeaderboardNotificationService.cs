@@ -110,12 +110,16 @@ public class LeaderboardNotificationService : DiscordBotService {
                 snapshot.ReleaseDate,
                 state.LiveBenchReleaseDate);
 
-            if (!state.LiveBenchInitialized) {
+            // Each LiveBench generation names its models differently, so a new generation starts a new
+            // baseline instead of announcing every model on its leaderboard.
+            if (LeaderboardMonitorLogic.RequiresLiveBenchBaseline(state, snapshot.Generation)) {
                 state.LiveBenchEntries.UnionWith(snapshot.ModelIds);
                 state.LiveBenchReleaseDate = snapshot.ReleaseDate;
+                state.LiveBenchGeneration = snapshot.Generation;
                 state.LiveBenchInitialized = true;
                 Logger.LogInformation(
-                    "Initialized LiveBench monitor with {EntryCount} existing entries from release {ReleaseDate}",
+                    "Initialized LiveBench {Generation} monitor with {EntryCount} existing entries from release {ReleaseDate}",
+                    snapshot.Generation,
                     snapshot.ModelIds.Count,
                     snapshot.ReleaseDate);
                 return true;
@@ -257,7 +261,13 @@ public class LeaderboardNotificationService : DiscordBotService {
         };
 
         using HttpResponseMessage response = await httpClient.SendAsync(request, stoppingToken);
-        response.EnsureSuccessStatusCode();
+        if (!response.IsSuccessStatusCode) {
+            throw new HttpRequestException(
+                $"GET {url} returned {(int)response.StatusCode} ({response.ReasonPhrase})",
+                null,
+                response.StatusCode);
+        }
+
         return await response.Content.ReadAsStringAsync(stoppingToken);
     }
 
@@ -283,11 +293,11 @@ internal sealed class LiveBenchClient(
     string baseUrl,
     Func<string, CancellationToken, Task<string>> getStringAsync) {
     Uri? cachedBundleUri;
-    DateOnly? cachedReleaseDate;
+    LiveBenchRelease? cachedRelease;
 
     internal async Task<LiveBenchSnapshot> FetchSnapshotAsync(CancellationToken stoppingToken) {
-        DateOnly releaseDate = await ResolveLatestReleaseAsync(stoppingToken);
-        string dataUrl = $"{baseUrl}table_{releaseDate:yyyy_MM_dd}.csv";
+        LiveBenchRelease release = await ResolveLatestReleaseAsync(stoppingToken);
+        string dataUrl = $"{baseUrl}{release.TablePath}";
         string csv = await getStringAsync(dataUrl, stoppingToken);
         IReadOnlyList<string> modelIds = LeaderboardMonitorLogic.ParseLiveBenchModelIds(csv);
 
@@ -295,24 +305,24 @@ internal sealed class LiveBenchClient(
             throw new InvalidDataException("LiveBench's latest leaderboard table contains no models");
         }
 
-        return new LiveBenchSnapshot(releaseDate, modelIds);
+        return new LiveBenchSnapshot(release.Date, release.Generation, modelIds);
     }
 
-    async Task<DateOnly> ResolveLatestReleaseAsync(CancellationToken stoppingToken) {
+    async Task<LiveBenchRelease> ResolveLatestReleaseAsync(CancellationToken stoppingToken) {
         string html = await getStringAsync(baseUrl, stoppingToken);
         string bundleSource = LeaderboardMonitorLogic.ParseLiveBenchBundleSource(html);
         var bundleUri = new Uri(new Uri(baseUrl), bundleSource);
 
-        if (bundleUri == cachedBundleUri && cachedReleaseDate.HasValue) {
-            return cachedReleaseDate.Value;
+        if (bundleUri == cachedBundleUri && cachedRelease != null) {
+            return cachedRelease;
         }
 
         string javascript = await getStringAsync(bundleUri.ToString(), stoppingToken);
-        DateOnly releaseDate = LeaderboardMonitorLogic.ParseLatestLiveBenchRelease(javascript);
+        LiveBenchRelease release = LeaderboardMonitorLogic.ParseLatestLiveBenchRelease(javascript);
 
         cachedBundleUri = bundleUri;
-        cachedReleaseDate = releaseDate;
-        return releaseDate;
+        cachedRelease = release;
+        return release;
     }
 }
 
@@ -329,6 +339,14 @@ internal static class LeaderboardMonitorLogic {
         "20\\d{2}-\\d{2}-\\d{2}",
         RegexOptions.Compiled);
 
+    static readonly Regex releaseIdArrayRegex = new(
+        "\\[(?<ids>\"20\\d{6}\"(?:,\"20\\d{6}\")*)\\]",
+        RegexOptions.Compiled);
+
+    static readonly Regex releaseIdRegex = new(
+        "20\\d{6}",
+        RegexOptions.Compiled);
+
     internal static string ParseLiveBenchBundleSource(string html) {
         Match bundleMatch = liveBenchBundleRegex.Match(html);
         if (!bundleMatch.Success) {
@@ -338,7 +356,25 @@ internal static class LeaderboardMonitorLogic {
         return bundleMatch.Groups["src"].Value;
     }
 
-    internal static DateOnly ParseLatestLiveBenchRelease(string javascript) {
+    internal static LiveBenchRelease ParseLatestLiveBenchRelease(string javascript) {
+        // LiveBench 2.0 releases are listed as yyyyMMdd ids and come after every v1 release on the site's timeline.
+        LiveBenchRelease? latestV2Release = releaseIdArrayRegex.Matches(javascript)
+            .SelectMany(match => releaseIdRegex.Matches(match.Groups["ids"].Value))
+            .Select(match => DateOnly.TryParseExact(
+                match.Value,
+                "yyyyMMdd",
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.None,
+                out DateOnly date)
+                ? new LiveBenchRelease(LiveBenchGeneration.V2, match.Value, date)
+                : null)
+            .OfType<LiveBenchRelease>()
+            .MaxBy(release => release.Date);
+
+        if (latestV2Release != null) {
+            return latestV2Release;
+        }
+
         Match? releaseArray = releaseArrayRegex.Matches(javascript)
             .OrderByDescending(match => releaseDateRegex.Matches(match.Groups["dates"].Value).Count)
             .FirstOrDefault();
@@ -347,9 +383,19 @@ internal static class LeaderboardMonitorLogic {
             throw new InvalidDataException("LiveBench's release list could not be found");
         }
 
-        return releaseDateRegex.Matches(releaseArray.Groups["dates"].Value)
+        DateOnly latestV1Date = releaseDateRegex.Matches(releaseArray.Groups["dates"].Value)
             .Select(match => DateOnly.ParseExact(match.Value, "yyyy-MM-dd", CultureInfo.InvariantCulture))
             .Max();
+        return new LiveBenchRelease(
+            LiveBenchGeneration.V1,
+            latestV1Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+            latestV1Date);
+    }
+
+    internal static bool RequiresLiveBenchBaseline(LeaderboardMonitorState state, LiveBenchGeneration generation) {
+        // States saved before LiveBench 2.0 have no generation and were built from v1 releases.
+        return !state.LiveBenchInitialized
+            || (state.LiveBenchGeneration ?? LiveBenchGeneration.V1) != generation;
     }
 
     internal static IReadOnlyList<string> ParseLiveBenchModelIds(string csv) {
@@ -434,7 +480,23 @@ internal static class LeaderboardMonitorLogic {
     }
 }
 
-internal sealed record LiveBenchSnapshot(DateOnly ReleaseDate, IReadOnlyList<string> ModelIds);
+internal sealed record LiveBenchSnapshot(
+    DateOnly ReleaseDate,
+    LiveBenchGeneration Generation,
+    IReadOnlyList<string> ModelIds);
+
+internal sealed record LiveBenchRelease(LiveBenchGeneration Generation, string Id, DateOnly Date) {
+    // Mirrors where livebench.ai loads each generation's leaderboard table from.
+    internal string TablePath => Generation == LiveBenchGeneration.V2
+        ? $"data/{Id}/table.csv"
+        : $"v1/table_{Id.Replace('-', '_')}.csv";
+}
+
+[JsonConverter(typeof(JsonStringEnumConverter))]
+internal enum LiveBenchGeneration {
+    V1,
+    V2
+}
 
 internal sealed record DeepSweSnapshot(DateTimeOffset GeneratedAt, IReadOnlyList<DeepSweEntry> Rows);
 
@@ -471,6 +533,7 @@ internal sealed class DeepSweEntry {
 internal sealed class LeaderboardMonitorState {
     public bool LiveBenchInitialized { get; set; }
     public DateOnly? LiveBenchReleaseDate { get; set; }
+    public LiveBenchGeneration? LiveBenchGeneration { get; set; }
     public HashSet<string> LiveBenchEntries { get; set; } = new(StringComparer.Ordinal);
     public bool DeepSweInitialized { get; set; }
     public HashSet<string> DeepSweEntries { get; set; } = new(StringComparer.Ordinal);
