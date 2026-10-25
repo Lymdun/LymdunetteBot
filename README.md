@@ -14,6 +14,8 @@ Create a `.env` file in parent directory containing your `DISCORD_TOKEN` value.
 
 The leaderboard monitor checks LiveBench and DeepSWE every 30 minutes and stores its deduplication state in `data/leaderboard-monitor-state.json`. The Docker Compose configuration persists this directory across container rebuilds.
 
+The FrenchBreaches RSS monitor checks `https://frenchbreaches.com/feed.xml` every 15 minutes and posts new entries to Discord channel `1563595759767654542`. Its deduplication state is stored in `data/french-breaches-state.json`; the first poll records the current feed without posting existing entries. Delivery timing depends on the feed's own cache freshness.
+
 ## Automatic deployment
 
 GitHub Actions publishes the .NET 8 Linux release and builds its Docker image only
