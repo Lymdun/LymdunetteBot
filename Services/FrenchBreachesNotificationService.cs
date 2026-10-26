@@ -23,6 +23,8 @@ public class FrenchBreachesNotificationService : DiscordBotService {
 
             using var httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
             httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("LymdunetteBot/1.0 (+https://github.com/Zerotistic/LymdunetteBot)");
+            // Cloudflare answers requests without an Accept header with a 403 challenge page.
+            httpClient.DefaultRequestHeaders.Accept.ParseAdd("application/rss+xml, application/xml;q=0.9, */*;q=0.8");
             var tracker = new FrenchBreachesFeedTracker(httpClient, statePath);
 
             Logger.LogInformation(
@@ -138,6 +140,7 @@ internal sealed class FrenchBreachesFeedTracker(HttpClient httpClient, string st
     async Task<List<FrenchBreachesItem>> FetchItemsAsync(CancellationToken cancellationToken) {
         await using var stream = await httpClient.GetStreamAsync(FEED_URL, cancellationToken);
         using XmlReader reader = XmlReader.Create(stream, new XmlReaderSettings {
+            Async = true,
             DtdProcessing = DtdProcessing.Prohibit,
             XmlResolver = null,
             MaxCharactersInDocument = 5_000_000
