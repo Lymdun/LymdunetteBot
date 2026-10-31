@@ -4,6 +4,7 @@ using Disqord.Gateway;
 using LymdunetteBot.Models;
 using LymdunetteBot.Services;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Qmmands;
 
 namespace LymdunetteBot.Modules;
@@ -123,6 +124,40 @@ public class General : LymdunetteBotModuleBase {
         }
 
         return Response(embed);
+    }
+
+    [SlashCommand("radio-spotify"), Description("Envoie le lien Spotify de la musique jouant sur la radio")]
+    public async Task<IResult> ShowRadioSpotify() {
+        var spotify = Context.Bot.Services.GetRequiredService<SpotifyClient>();
+        if (!spotify.IsConfigured) {
+            return Response("Spotify n'est pas configuré sur ce bot (SPOTIFY_CLIENT_ID / SPOTIFY_CLIENT_SECRET manquants).");
+        }
+
+        await Deferral();
+
+        var audioService = Context.Bot.Services.GetRequiredService<AudioPlayerService>();
+        AudioPlayerService.RadioStatus radioStatus = await audioService.GetRadioStatusAsync();
+        string? nowPlaying = radioStatus.NowPlaying?.Trim();
+        if (string.IsNullOrEmpty(nowPlaying)) {
+            return Response("Impossible de récupérer le titre en cours.");
+        }
+
+        SpotifyTrack? track;
+        try {
+            track = await SpotifyTrackMatcher.FindAsync(spotify, nowPlaying, radioStatus.TrackDuration);
+        } catch (Exception ex) {
+            Context.Bot.Services.GetRequiredService<ILogger<General>>()
+                .LogError(ex, "Error while looking up {NowPlaying} on Spotify", nowPlaying);
+            return Response("Une erreur est survenue lors de la recherche sur Spotify.");
+        }
+
+        if (track == null) {
+            return Response($"Pas de version Spotify fiable trouvée pour « {nowPlaying} ».\n"
+                            + $"Recherche manuelle : <https://open.spotify.com/search/{Uri.EscapeDataString(nowPlaying)}>");
+        }
+
+        // Plain content (no embed) so that Discord shows its own Spotify player for the link.
+        return Response($"🎵 **{nowPlaying}**\n{track.ExternalUrls!.Spotify}");
     }
 
     [SlashCommand("radio-queue"), Description("Affiche les musiques à venir")]

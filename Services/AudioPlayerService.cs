@@ -12,9 +12,8 @@ using Qmmands;
 
 namespace LymdunetteBot.Services;
 
-public class AudioPlayerService : DiscordBotService {
+public class AudioPlayerService(HttpClient httpClient) : DiscordBotService {
     readonly SemaphoreSlim _semaphore = new(1, 1);
-    HttpClient? _httpClient;
     AudioPlayer? _audioPlayer;
     CancellationTokenSource? _cts;
 
@@ -32,7 +31,6 @@ public class AudioPlayerService : DiscordBotService {
             VoiceExtension voiceExt = Bot.GetRequiredExtension<VoiceExtension>();
             IVoiceConnection voiceConn = await voiceExt.ConnectAsync(guildId, channelId, _cts.Token);
 
-            _httpClient = new HttpClient();
             _audioPlayer = new AudioPlayer(voiceConn);
 
             _ = PlayRadioWithReconnectionAsync(guildId);
@@ -100,7 +98,7 @@ public class AudioPlayerService : DiscordBotService {
 
     public async Task<RadioStatus> GetRadioStatusAsync() {
         try {
-            string response = await _httpClient!.GetStringAsync(RADIO_API_URL);
+            string response = await httpClient.GetStringAsync(RADIO_API_URL);
             RadioInfo? radioInfo = JsonSerializer.Deserialize<RadioInfo>(response);
 
             long currentTimestamp = radioInfo?.Main?.Current ?? 0;
@@ -176,11 +174,6 @@ public class AudioPlayerService : DiscordBotService {
                 _audioPlayer.Stop();
                 await _audioPlayer.DisposeAsync();
                 _audioPlayer = null;
-            }
-
-            if (_httpClient != null) {
-                _httpClient.Dispose();
-                _httpClient = null;
             }
 
             VoiceExtension voiceExtension = Bot.GetRequiredExtension<VoiceExtension>();

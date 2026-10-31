@@ -65,6 +65,7 @@ public static class Program {
         services.AddLogging();
         services.AddSingleton(new HttpClient { Timeout = TimeSpan.FromSeconds(5) });
         services.AddSingleton<Services.XLinkConverter>();
+        services.AddSingleton<Services.SpotifyClient>();
     }
 
     static GatewayIntents GetDiscordIntents() {

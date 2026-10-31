@@ -16,6 +16,28 @@ The leaderboard monitor checks LiveBench and DeepSWE every 30 minutes and stores
 
 The FrenchBreaches RSS monitor checks `https://frenchbreaches.com/feed.xml` every 15 minutes and posts new entries to Discord channel `1563595759767654542`. Its deduplication state is stored in `data/french-breaches-state.json`; the first poll records the current feed without posting existing entries. Delivery timing depends on the feed's own cache freshness.
 
+## Spotify link for the radio (`/radio-spotify`)
+
+`/radio-spotify` posts the Spotify link of the song currently playing on r-a-d.io. It needs a Spotify app:
+create one on the [Spotify developer dashboard](https://developer.spotify.com/dashboard) (no redirect URI or user
+login needed, the bot uses the client-credentials flow) and add its keys to `.env`:
+
+```text
+SPOTIFY_CLIENT_ID=...
+SPOTIFY_CLIENT_SECRET=...
+```
+
+Matching is deliberately strict, so the bot never posts a different version of the song:
+
+- the artist must be the same (romaji and kana names are compared after converting kana to romaji, and Spotify's
+  artist search resolves names such as `Kenshi Yonezu` to `米津玄師`);
+- the version must be the same: a remix, live, TV size, instrumental, cover, sped-up... only matches the same kind
+  of version (and the same remixer), and a plain title never matches one;
+- when the radio knows the track's duration, the Spotify track must be within 5 seconds of it. A title written in
+  kanji on one side and romaji on the other is accepted only when exactly one song of that artist has that duration.
+
+When nothing passes these checks, the bot says so and links a Spotify search instead.
+
 ## Automatic deployment
 
 GitHub Actions publishes the .NET 8 Linux release and builds its Docker image only
