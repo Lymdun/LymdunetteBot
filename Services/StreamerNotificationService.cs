@@ -1,4 +1,5 @@
-﻿using System.Text.RegularExpressions;
+﻿using System.Net;
+using System.Text.RegularExpressions;
 using Disqord;
 using Disqord.Bot.Hosting;
 using Microsoft.Extensions.Logging;
@@ -12,6 +13,10 @@ public class StreamerNotificationService : DiscordBotService {
     readonly SemaphoreSlim _semaphore = new(1, 1);
     HttpClient? _httpClient;
     string _lastDjName = string.Empty;
+
+    // Last thread seen on the SSE stream. null until the first "thread" event is received,
+    // so that connecting to the stream does not announce a thread that was already up.
+    RadioThread? _lastThread;
 
     const ulong CHANNEL_ID = 1368365834166075512;
 
@@ -95,7 +100,128 @@ public class StreamerNotificationService : DiscordBotService {
                 string? imageUrl = ExtractImageUrl(data);
                 await SendDiscordMessage(djName, imageUrl);
             }
+        } else if (eventName == "thread") {
+            await HandleThreadEvent(data);
         }
+    }
+
+    async Task HandleThreadEvent(string data) {
+        RadioThread thread = ParseThread(data);
+        RadioThread? previous = _lastThread;
+        _lastThread = thread;
+
+        // First event after startup: only remember the current thread.
+        // Same thread re-sent (e.g. after an SSE reconnection): nothing to announce.
+        // Thread removed: nothing to announce either.
+        if (previous == null || thread == previous || thread.Kind == RadioThreadKind.None) {
+            return;
+        }
+
+        Logger.LogInformation("Radio thread changed: {Thread}", thread);
+
+        bool isUpdate = previous.Kind != RadioThreadKind.None;
+        await SendThreadNotification(thread, isUpdate);
+    }
+
+    async Task SendThreadNotification(RadioThread thread, bool isUpdate) {
+        List<Snowflake> voiceChannelIds = GetRadioVoiceChannelIds();
+        if (voiceChannelIds.Count == 0) {
+            return;
+        }
+
+        var embed = new LocalEmbed()
+            .WithTitle(isUpdate ? "Thread mis à jour" : "Nouveau thread")
+            .WithColor(Color.Orange);
+
+        bool isAbsoluteUrl = Uri.TryCreate(thread.Value, UriKind.Absolute, out Uri? uri)
+                             && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
+
+        if (thread.Kind == RadioThreadKind.Image && isAbsoluteUrl) {
+            embed.WithImageUrl(thread.Value);
+        } else {
+            if (isAbsoluteUrl) {
+                embed.WithUrl(thread.Value);
+            }
+
+            embed.WithDescription(thread.Value);
+        }
+
+        foreach (Snowflake channelId in voiceChannelIds) {
+            try {
+                await Bot.SendMessageAsync(channelId, new LocalMessage().WithEmbeds(embed));
+            } catch (Exception ex) {
+                Logger.LogError(ex, "Error sending thread notification to voice channel {ChannelId}", channelId);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Returns the voice channels the bot is currently connected to, i.e. the ones where the radio is playing.
+    /// </summary>
+    List<Snowflake> GetRadioVoiceChannelIds() {
+        var channelIds = new List<Snowflake>();
+
+        foreach (Snowflake guildId in Bot.GetGuilds().Keys) {
+            CachedVoiceState? voiceState = Bot.GetVoiceState(guildId, Bot.CurrentUser.Id);
+            if (voiceState?.ChannelId is { } channelId) {
+                channelIds.Add(channelId);
+            }
+        }
+
+        return channelIds;
+    }
+
+    /// <summary>
+    /// Parses the HTML of the SSE "thread" event.
+    /// </summary>
+    /// <example>
+    /// Link thread:  &lt;div id="thread" ...&gt;&lt;a class="has-text-link" href="https://boards.4chan.org/a/thread/1" target="_blank"&gt;Thread up!&lt;/a&gt;&lt;/div&gt;
+    /// Image thread: &lt;div id="thread" ...&gt;&lt;img src="https://example.com/image.png" alt=""&gt;&lt;/div&gt;
+    /// No thread:    &lt;div id="thread" ...&gt;There is no thread up.&lt;/div&gt;
+    /// AFK streamer: empty data
+    /// </example>
+    static RadioThread ParseThread(string data) {
+        Match threadMatch = Regex.Match(data, @"<div id=""thread""[^>]*>(.*?)</div>", RegexOptions.Singleline);
+        if (!threadMatch.Success) {
+            return RadioThread.None;
+        }
+
+        string threadHtml = threadMatch.Groups[1].Value;
+
+        Match linkMatch = Regex.Match(threadHtml, @"<a\b[^>]*\bhref=""([^""]*)""");
+        if (linkMatch.Success) {
+            return CreateThread(RadioThreadKind.Link, linkMatch.Groups[1].Value);
+        }
+
+        Match imageMatch = Regex.Match(threadHtml, @"<img\b[^>]*\bsrc=""([^""]*)""");
+        if (imageMatch.Success) {
+            return CreateThread(RadioThreadKind.Image, imageMatch.Groups[1].Value);
+        }
+
+        return RadioThread.None;
+    }
+
+    static RadioThread CreateThread(RadioThreadKind kind, string rawValue) {
+        string value = WebUtility.HtmlDecode(rawValue).Trim();
+        if (string.IsNullOrEmpty(value)) {
+            return RadioThread.None;
+        }
+
+        if (value.StartsWith('/') && !value.StartsWith("//")) {
+            value = BASE_URL + value;
+        }
+
+        return new RadioThread(kind, value);
+    }
+
+    enum RadioThreadKind {
+        None,
+        Link,
+        Image
+    }
+
+    record RadioThread(RadioThreadKind Kind, string Value) {
+        public static readonly RadioThread None = new(RadioThreadKind.None, string.Empty);
     }
 
     async Task SendDiscordMessage(string djName, string? imageUrl) {
