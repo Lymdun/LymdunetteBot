@@ -21,7 +21,9 @@ public class StreamerNotificationService : DiscordBotService {
     const ulong CHANNEL_ID = 1368365834166075512;
 
     const string BASE_URL = "https://r-a-d.io";
-    const string SSE_URL = "https://r-a-d.io/v1/sse";
+    // Force the theme used to render the SSE HTML: holiday and DJ themes take priority over the default one
+    // and some of them do not render the DJ name, which ExtractDjName relies on.
+    const string SSE_URL = "https://r-a-d.io/v1/sse?theme=default-dark";
     const int RECONNECT_DELAY_MS = 1500;
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken) {
