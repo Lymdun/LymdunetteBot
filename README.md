@@ -16,7 +16,7 @@ The leaderboard monitor checks LiveBench and DeepSWE every 30 minutes and stores
 
 The FrenchBreaches RSS monitor checks `https://frenchbreaches.com/feed.xml` every 15 minutes and posts new entries to Discord channel `1563595759767654542`. Its deduplication state is stored in `data/french-breaches-state.json`; the first poll records the current feed without posting existing entries. Delivery timing depends on the feed's own cache freshness.
 
-While the radio is playing (`/radio`), the bot posts in the voice channel's text chat whenever the r/a/dio DJ sets up or changes the thread (link or image), based on the `thread` event of `https://r-a-d.io/v1/sse`. The thread that is already up when the bot connects to the stream is not announced, nor is a thread being removed.
+When the r/a/dio DJ sets up or changes the thread (link or image), the bot posts it in the DJ announcements channel `1368365834166075512`, based on the `thread` event of `https://r-a-d.io/v1/sse`. The thread that is already up when the bot connects to the stream is not announced, nor is a thread being removed.
 
 ## Automatic deployment
 

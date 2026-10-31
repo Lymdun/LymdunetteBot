@@ -126,51 +126,28 @@ public class StreamerNotificationService : DiscordBotService {
     }
 
     async Task SendThreadNotification(RadioThread thread, bool isUpdate) {
-        List<Snowflake> voiceChannelIds = GetRadioVoiceChannelIds();
-        if (voiceChannelIds.Count == 0) {
-            return;
-        }
+        try {
+            var embed = new LocalEmbed()
+                .WithTitle(isUpdate ? "Thread mis à jour" : "Nouveau thread")
+                .WithColor(Color.Orange);
 
-        var embed = new LocalEmbed()
-            .WithTitle(isUpdate ? "Thread mis à jour" : "Nouveau thread")
-            .WithColor(Color.Orange);
+            bool isAbsoluteUrl = Uri.TryCreate(thread.Value, UriKind.Absolute, out Uri? uri)
+                                 && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
 
-        bool isAbsoluteUrl = Uri.TryCreate(thread.Value, UriKind.Absolute, out Uri? uri)
-                             && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
+            if (thread.Kind == RadioThreadKind.Image && isAbsoluteUrl) {
+                embed.WithImageUrl(thread.Value);
+            } else {
+                if (isAbsoluteUrl) {
+                    embed.WithUrl(thread.Value);
+                }
 
-        if (thread.Kind == RadioThreadKind.Image && isAbsoluteUrl) {
-            embed.WithImageUrl(thread.Value);
-        } else {
-            if (isAbsoluteUrl) {
-                embed.WithUrl(thread.Value);
+                embed.WithDescription(thread.Value);
             }
 
-            embed.WithDescription(thread.Value);
+            await Bot.SendMessageAsync(CHANNEL_ID, new LocalMessage().WithEmbeds(embed));
+        } catch (Exception ex) {
+            Logger.LogError(ex, "Error sending thread notification to Discord");
         }
-
-        foreach (Snowflake channelId in voiceChannelIds) {
-            try {
-                await Bot.SendMessageAsync(channelId, new LocalMessage().WithEmbeds(embed));
-            } catch (Exception ex) {
-                Logger.LogError(ex, "Error sending thread notification to voice channel {ChannelId}", channelId);
-            }
-        }
-    }
-
-    /// <summary>
-    /// Returns the voice channels the bot is currently connected to, i.e. the ones where the radio is playing.
-    /// </summary>
-    List<Snowflake> GetRadioVoiceChannelIds() {
-        var channelIds = new List<Snowflake>();
-
-        foreach (Snowflake guildId in Bot.GetGuilds().Keys) {
-            CachedVoiceState? voiceState = Bot.GetVoiceState(guildId, Bot.CurrentUser.Id);
-            if (voiceState?.ChannelId is { } channelId) {
-                channelIds.Add(channelId);
-            }
-        }
-
-        return channelIds;
     }
 
     /// <summary>
