@@ -25,6 +25,10 @@ public class StreamerNotificationService : DiscordBotService {
     // and some of them do not render the DJ name, which ExtractDjName relies on.
     const string SSE_URL = "https://r-a-d.io/v1/sse?theme=default-dark";
     const int RECONNECT_DELAY_MS = 1500;
+    // Stay under Discord's upload limit for bots
+    const int MAX_THREAD_IMAGE_BYTES = 8 * 1024 * 1024;
+
+    static readonly HttpClient ImageClient = new() { Timeout = TimeSpan.FromSeconds(30) };
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken) {
         await StartListening(stoppingToken);
@@ -131,17 +135,27 @@ public class StreamerNotificationService : DiscordBotService {
                 .WithTitle(isUpdate ? "Thread mis à jour" : "Nouveau thread")
                 .WithColor(Color.Orange);
 
-            bool isAbsoluteUrl = Uri.TryCreate(thread.Value, UriKind.Absolute, out Uri? uri)
-                                 && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
+            // Always show the thread value: Discord leaves an image-only embed empty when it cannot load the image.
+            embed.WithDescription(Truncate(thread.Value, Discord.Limits.Message.Embed.MaxDescriptionLength));
 
-            if (thread.Kind == RadioThreadKind.Image && isAbsoluteUrl) {
-                embed.WithImageUrl(thread.Value);
-            } else {
-                if (isAbsoluteUrl) {
-                    embed.WithUrl(thread.Value);
+            if (thread.Kind != RadioThreadKind.Text) {
+                embed.WithUrl(thread.Value);
+            }
+
+            if (thread.Kind == RadioThreadKind.Image) {
+                // Upload the image ourselves so that Discord does not have to fetch it from the image host.
+                LocalAttachment? attachment = await DownloadThreadImage(thread.Value);
+                if (attachment != null) {
+                    try {
+                        embed.WithImageUrl($"attachment://{attachment.FileName.Value}");
+                        await Bot.SendMessageAsync(CHANNEL_ID, new LocalMessage().WithEmbeds(embed).WithAttachments(attachment));
+                        return;
+                    } catch (Exception ex) {
+                        Logger.LogWarning(ex, "Could not upload thread image {ImageUrl}, falling back to its URL", thread.Value);
+                    }
                 }
 
-                embed.WithDescription(thread.Value);
+                embed.WithImageUrl(thread.Value);
             }
 
             await Bot.SendMessageAsync(CHANNEL_ID, new LocalMessage().WithEmbeds(embed));
@@ -150,11 +164,56 @@ public class StreamerNotificationService : DiscordBotService {
         }
     }
 
+    async Task<LocalAttachment?> DownloadThreadImage(string imageUrl) {
+        try {
+            using HttpResponseMessage response = await ImageClient.GetAsync(imageUrl, HttpCompletionOption.ResponseHeadersRead);
+            response.EnsureSuccessStatusCode();
+
+            string? mediaType = response.Content.Headers.ContentType?.MediaType;
+            if (mediaType == null || !mediaType.StartsWith("image/", StringComparison.OrdinalIgnoreCase)) {
+                Logger.LogWarning("Thread image {ImageUrl} is not an image ({MediaType})", imageUrl, mediaType);
+                return null;
+            }
+
+            if (response.Content.Headers.ContentLength > MAX_THREAD_IMAGE_BYTES) {
+                Logger.LogWarning("Thread image {ImageUrl} is too large to be uploaded ({Size} bytes)",
+                    imageUrl, response.Content.Headers.ContentLength);
+                return null;
+            }
+
+            byte[] bytes = await response.Content.ReadAsByteArrayAsync();
+            if (bytes.Length > MAX_THREAD_IMAGE_BYTES) {
+                Logger.LogWarning("Thread image {ImageUrl} is too large to be uploaded ({Size} bytes)", imageUrl, bytes.Length);
+                return null;
+            }
+
+            // attachment:// only accepts simple file names
+            string subtype = mediaType["image/".Length..].ToLowerInvariant();
+            string extension = subtype switch {
+                "jpeg" => "jpg",
+                "png" or "gif" or "webp" or "avif" => subtype,
+                _ => "png"
+            };
+
+            return LocalAttachment.Bytes(bytes, $"thread.{extension}");
+        } catch (Exception ex) {
+            Logger.LogWarning(ex, "Could not download thread image {ImageUrl}", imageUrl);
+            return null;
+        }
+    }
+
+    static string Truncate(string value, int maxLength) {
+        return value.Length <= maxLength ? value : value[..(maxLength - 1)] + "…";
+    }
+
     /// <summary>
     /// Parses the HTML of the SSE "thread" event.
+    /// The thread is a free-form string set by the DJ: a link, "image:" followed by an image URL, or plain text,
+    /// which r/a/dio still renders as a (percent-encoded) link.
     /// </summary>
     /// <example>
     /// Link thread:  &lt;div id="thread" ...&gt;&lt;a class="has-text-link" href="https://boards.4chan.org/a/thread/1" target="_blank"&gt;Thread up!&lt;/a&gt;&lt;/div&gt;
+    /// Text thread:  &lt;div id="thread" ...&gt;&lt;a class="has-text-link" href="Merry%20Christmas!" target="_blank"&gt;Thread up!&lt;/a&gt;&lt;/div&gt;
     /// Image thread: &lt;div id="thread" ...&gt;&lt;img src="https://example.com/image.png" alt=""&gt;&lt;/div&gt;
     /// No thread:    &lt;div id="thread" ...&gt;There is no thread up.&lt;/div&gt;
     /// AFK streamer: empty data
@@ -186,17 +245,31 @@ public class StreamerNotificationService : DiscordBotService {
             return RadioThread.None;
         }
 
-        if (value.StartsWith('/') && !value.StartsWith("//")) {
+        if (value.StartsWith("//")) {
+            value = "https:" + value;
+        } else if (value.StartsWith('/')) {
             value = BASE_URL + value;
+        }
+
+        if (!IsHttpUrl(value)) {
+            // Not a URL: plain text that the template percent-encoded as a link
+            value = Uri.UnescapeDataString(value).Trim();
+            return string.IsNullOrEmpty(value) ? RadioThread.None : new RadioThread(RadioThreadKind.Text, value);
         }
 
         return new RadioThread(kind, value);
     }
 
+    static bool IsHttpUrl(string value) {
+        return Uri.TryCreate(value, UriKind.Absolute, out Uri? uri)
+               && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
+    }
+
     enum RadioThreadKind {
         None,
         Link,
-        Image
+        Image,
+        Text
     }
 
     record RadioThread(RadioThreadKind Kind, string Value) {
