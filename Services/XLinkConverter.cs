@@ -53,13 +53,19 @@ public class XLinkConverter(HttpClient httpClient, ILogger<XLinkConverter> logge
             // Rebuild the path so an existing language suffix is never duplicated.
             var url = new UriBuilder(originalUrl) {
                 Scheme = "https", Host = "fixupx.com", Port = -1,
-                Path = $"/{post.Groups["user"].Value}/status/{id}{media}" + (info.Translate ? "/en" : string.Empty)
+                Path = $"/{post.Groups["user"].Value}/status/{id}{media}" + (info.Translate ? "/en" : string.Empty),
+                Query = RemoveShareParameters(originalUrl.Query)
             };
             replacements[match.Index] = url.Uri.AbsoluteUri + match.Value[raw.Length..];
         }
 
         return Links.Replace(content, match => replacements.GetValueOrDefault(match.Index, match.Value));
     }
+
+    // X adds `s` and `a` when sharing a post; they only identify the share, not the post.
+    static string RemoveShareParameters(string query) =>
+        string.Join('&', query.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries)
+            .Where(parameter => parameter.Split('=', 2)[0].ToLowerInvariant() is not ("a" or "s")));
 
     static bool NeedsTranslation(string? language) {
         string? primary = language?.Trim().ToLowerInvariant().Split('-', '_')[0];

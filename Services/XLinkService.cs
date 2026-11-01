@@ -27,8 +27,21 @@ public class XLinkService(XLinkConverter converter) : DiscordBotService {
                 return;
             }
 
+            // Webhooks cannot send real replies, so name the replied-to user and link their message instead.
+            var replyMentions = LocalAllowedMentions.None;
             if (message.Reference?.MessageId is { } replyId) {
-                content = $"> [Reply](https://discord.com/channels/{e.GuildId}/{message.Reference.ChannelId}/{replyId})\n{content}";
+                string link = $"https://discord.com/channels/{e.GuildId}/{message.Reference.ChannelId}/{replyId}";
+                var replied = message.ReferencedMessage.HasValue ? message.ReferencedMessage.Value : null;
+                string target = replied == null ? string.Empty
+                    : replied.WebhookId != null ? $"**{replied.Author.Name}** "
+                    : $"<@{replied.Author.Id}> ";
+                content = $"-# ↪ Replying to {target}{link}\n{content}";
+
+                // Ping only when the original reply did, as Discord would.
+                if (replied != null && replied.WebhookId == null
+                    && message.MentionedUsers.Any(user => user.Id == replied.Author.Id))
+                    replyMentions = new LocalAllowedMentions().WithParsedMentions(ParsedMentions.None)
+                        .WithUserIds(replied.Author.Id);
             }
             var chunks = SplitContent(content);
             var channel = await Client.FetchChannelAsync(e.ChannelId);
@@ -51,7 +64,7 @@ public class XLinkService(XLinkConverter converter) : DiscordBotService {
                     Content = chunks[i],
                     AuthorName = name,
                     AuthorAvatarUrl = avatar,
-                    AllowedMentions = LocalAllowedMentions.None,
+                    AllowedMentions = i == 0 ? replyMentions : LocalAllowedMentions.None,
                     Attachments = i == 0 ? attachments : new List<LocalAttachment>()
                 };
                 var sent = await Client.ExecuteWebhookAsync(webhook.Id, webhook.Token!, repost,
