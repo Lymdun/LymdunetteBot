@@ -15,6 +15,7 @@ namespace LymdunetteBot.Services;
 public class FrenchBreachesNotificationService : DiscordBotService {
     const ulong CHANNEL_ID = 1563595759767654542;
     static readonly TimeSpan pollInterval = TimeSpan.FromMinutes(15);
+    static readonly TimeZoneInfo digestTimeZone = TimeZoneInfo.FindSystemTimeZoneById("Europe/Paris");
     static readonly string statePath = Path.Combine(AppContext.BaseDirectory, "data", "french-breaches-state.json");
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken) {
@@ -28,51 +29,109 @@ public class FrenchBreachesNotificationService : DiscordBotService {
             var tracker = new FrenchBreachesFeedTracker(httpClient, statePath);
 
             Logger.LogInformation(
-                "Watching FrenchBreaches RSS for channel {ChannelId}; state: {StatePath}",
+                "Watching FrenchBreaches RSS for a daily 21:00 Europe/Paris digest in channel {ChannelId}; state: {StatePath}",
                 CHANNEL_ID,
                 statePath);
 
             while (!stoppingToken.IsCancellationRequested) {
                 try {
-                    await tracker.CheckForUpdatesAsync(SendNotificationAsync, stoppingToken);
+                    await tracker.CheckForUpdatesAsync(stoppingToken);
                 } catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) {
                     break;
                 } catch (Exception ex) {
-                    Logger.LogError(ex, "Failed to check or deliver FrenchBreaches updates; retrying in 15 minutes");
+                    Logger.LogError(ex, "Failed to check FrenchBreaches RSS; retrying");
                 }
 
-                await Task.Delay(pollInterval, stoppingToken);
+                try {
+                    DateTimeOffset parisNow = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, digestTimeZone);
+                    await tracker.SendDailyDigestIfDueAsync(parisNow, SendDigestAsync, stoppingToken);
+                } catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) {
+                    break;
+                } catch (Exception ex) {
+                    Logger.LogError(ex, "Failed to send the FrenchBreaches daily digest; it will be retried");
+                }
+
+                await Task.Delay(GetNextWakeDelay(DateTimeOffset.UtcNow), stoppingToken);
             }
         } catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) {
             // Normal host shutdown, including cancellation while waiting for Discord.
         }
     }
 
-    async Task SendNotificationAsync(FrenchBreachesItem item, CancellationToken cancellationToken) {
-        var embed = new LocalEmbed()
-            .WithTitle($"Nouvelle fuite référencée : {PlainText(item.Title, 180)}")
-            .WithUrl(item.Url)
-            .WithColor(Color.Orange);
-
-        string summary = PlainText(item.Summary, 900);
-        if (!string.IsNullOrWhiteSpace(summary))
-            embed.WithDescription(summary);
-
-        string status = GetStatusLabel(item.Category);
-        if (!string.IsNullOrWhiteSpace(status))
-            embed.AddField("Statut", status, true);
-
-        if (item.PublishedAt.HasValue)
-            embed.WithTimestamp(item.PublishedAt.Value);
-
+    async Task SendDigestAsync(
+        IReadOnlyList<FrenchBreachesItem> items,
+        DateOnly digestDate,
+        CancellationToken cancellationToken) {
+        LocalMessage message = CreateDigestMessage(items, digestDate);
         await Bot.SendMessageAsync(
             CHANNEL_ID,
-            new LocalMessage()
-                .WithEmbeds(embed)
-                .WithAllowedMentions(LocalAllowedMentions.None),
+            message,
             cancellationToken: cancellationToken);
 
-        Logger.LogInformation("Sent FrenchBreaches alert {FeedId}: {Title}", item.Id, item.Title);
+        Logger.LogInformation("Sent FrenchBreaches daily digest for {DigestDate} with {ItemCount} entries",
+            digestDate,
+            items.Count);
+    }
+
+    static TimeSpan GetNextWakeDelay(DateTimeOffset utcNow) {
+        DateTimeOffset parisNow = TimeZoneInfo.ConvertTime(utcNow, digestTimeZone);
+        DateTime nextDigestLocal = parisNow.Date.AddHours(21);
+        if (parisNow.DateTime >= nextDigestLocal)
+            nextDigestLocal = nextDigestLocal.AddDays(1);
+
+        DateTimeOffset nextDigestUtc = new(
+            TimeZoneInfo.ConvertTimeToUtc(DateTime.SpecifyKind(nextDigestLocal, DateTimeKind.Unspecified), digestTimeZone),
+            TimeSpan.Zero);
+        TimeSpan untilDigest = nextDigestUtc - utcNow;
+        return untilDigest < pollInterval ? untilDigest : pollInterval;
+    }
+
+    static LocalMessage CreateDigestMessage(IReadOnlyList<FrenchBreachesItem> items, DateOnly digestDate) {
+        List<string> lines = items.Select(item =>
+            $"• **[{EscapeMarkdownLinkText(PlainText(item.Title, 100))}]({item.Url})** — {GetStatusLabel(item.Category)}\n  {PlainText(item.Summary, 100)}")
+            .ToList();
+
+        if (lines.Sum(line => line.Length) > 5_300) {
+            lines = items.Select(item =>
+                $"• **[{EscapeMarkdownLinkText(PlainText(item.Title, 100))}]({item.Url})** — {GetStatusLabel(item.Category)}")
+                .ToList();
+        }
+
+        var descriptions = new List<string>();
+        var current = new System.Text.StringBuilder();
+        foreach (string line in lines) {
+            int addedLength = line.Length + (current.Length == 0 ? 0 : 2);
+            if (current.Length > 0 && current.Length + addedLength > 3_500) {
+                descriptions.Add(current.ToString());
+                current.Clear();
+            }
+
+            if (current.Length > 0)
+                current.AppendLine().AppendLine();
+            current.Append(line);
+        }
+
+        if (current.Length > 0)
+            descriptions.Add(current.ToString());
+
+        LocalEmbed[] embeds = descriptions.Select((description, index) => new LocalEmbed()
+            .WithTitle(index == 0
+                ? $"Digest quotidien FrenchBreaches — {digestDate:dd/MM/yyyy}"
+                : "Suite du digest")
+            .WithDescription(description)
+            .WithColor(Color.Orange))
+            .ToArray();
+
+        return new LocalMessage()
+            .WithContent($"🔐 **Nouvelles fuites et cyberattaques — {digestDate:dd/MM/yyyy}** ({items.Count})")
+            .WithEmbeds(embeds)
+            .WithAllowedMentions(LocalAllowedMentions.None);
+    }
+
+    static string EscapeMarkdownLinkText(string text) {
+        return text.Replace("\\", "\\\\", StringComparison.Ordinal)
+            .Replace("[", "\\[", StringComparison.Ordinal)
+            .Replace("]", "\\]", StringComparison.Ordinal);
     }
 
     static string GetStatusLabel(string category) {
@@ -108,7 +167,6 @@ internal sealed class FrenchBreachesFeedTracker(HttpClient httpClient, string st
     bool _stateNeedsSave;
 
     internal async Task CheckForUpdatesAsync(
-        Func<FrenchBreachesItem, CancellationToken, Task> notify,
         CancellationToken cancellationToken) {
         _state ??= await ReadStateAsync(cancellationToken);
         await SavePendingStateAsync(cancellationToken);
@@ -124,17 +182,50 @@ internal sealed class FrenchBreachesFeedTracker(HttpClient httpClient, string st
             return;
         }
 
+        bool changed = false;
         foreach (FrenchBreachesItem item in items
             .OrderBy(item => item.PublishedAt ?? DateTimeOffset.MinValue)
             .ThenBy(item => item.Id, StringComparer.Ordinal)) {
             if (_state.SeenIds.Contains(item.Id))
                 continue;
 
-            await notify(item, cancellationToken);
             _state.SeenIds.Add(item.Id);
+            _state.PendingItems.Add(item);
+            changed = true;
+        }
+
+        if (changed) {
             _stateNeedsSave = true;
             await SavePendingStateAsync(cancellationToken);
+            Logger.LogInformation("Queued {ItemCount} new FrenchBreaches entries for the daily digest", _state.PendingItems.Count);
         }
+    }
+
+    internal async Task SendDailyDigestIfDueAsync(
+        DateTimeOffset parisNow,
+        Func<IReadOnlyList<FrenchBreachesItem>, DateOnly, CancellationToken, Task> sendDigest,
+        CancellationToken cancellationToken) {
+        _state ??= await ReadStateAsync(cancellationToken);
+        if (_state == null)
+            return;
+
+        DateOnly today = DateOnly.FromDateTime(parisNow.DateTime);
+        if (TimeOnly.FromDateTime(parisNow.DateTime) < new TimeOnly(21, 0)
+            || _state.LastDigestDate == today)
+            return;
+
+        if (_state.PendingItems.Count > 0) {
+            FrenchBreachesItem[] digestItems = _state.PendingItems
+                .OrderBy(item => item.PublishedAt ?? DateTimeOffset.MinValue)
+                .ThenBy(item => item.Id, StringComparer.Ordinal)
+                .ToArray();
+            await sendDigest(digestItems, today, cancellationToken);
+            _state.PendingItems.Clear();
+        }
+
+        _state.LastDigestDate = today;
+        _stateNeedsSave = true;
+        await SavePendingStateAsync(cancellationToken);
     }
 
     async Task<List<FrenchBreachesItem>> FetchItemsAsync(CancellationToken cancellationToken) {
@@ -188,7 +279,8 @@ internal sealed class FrenchBreachesFeedTracker(HttpClient httpClient, string st
             FrenchBreachesState? state = await JsonSerializer.DeserializeAsync<FrenchBreachesState>(
                 stream,
                 cancellationToken: cancellationToken);
-            if (state == null || state.Version != 1 || state.SeenIds == null || state.SeenIds.Any(string.IsNullOrWhiteSpace))
+            if (state == null || state.Version != 1 || state.SeenIds == null || state.PendingItems == null
+                || state.SeenIds.Any(string.IsNullOrWhiteSpace))
                 throw new InvalidDataException($"Invalid FrenchBreaches notification state: {_statePath}");
 
             return state;
@@ -221,6 +313,10 @@ internal sealed class FrenchBreachesFeedTracker(HttpClient httpClient, string st
 
         [JsonRequired]
         public HashSet<string> SeenIds { get; init; } = new(StringComparer.Ordinal);
+
+        public List<FrenchBreachesItem> PendingItems { get; init; } = [];
+
+        public DateOnly? LastDigestDate { get; set; }
     }
 }
 
