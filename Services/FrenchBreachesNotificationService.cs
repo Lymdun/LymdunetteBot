@@ -35,7 +35,9 @@ public class FrenchBreachesNotificationService : DiscordBotService {
 
             while (!stoppingToken.IsCancellationRequested) {
                 try {
-                    await tracker.CheckForUpdatesAsync(stoppingToken);
+                    int queuedCount = await tracker.CheckForUpdatesAsync(stoppingToken);
+                    if (queuedCount > 0)
+                        Logger.LogInformation("Queued {ItemCount} new FrenchBreaches entries for the daily digest", queuedCount);
                 } catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) {
                     break;
                 } catch (Exception ex) {
@@ -166,7 +168,7 @@ internal sealed class FrenchBreachesFeedTracker(HttpClient httpClient, string st
     FrenchBreachesState? _state;
     bool _stateNeedsSave;
 
-    internal async Task CheckForUpdatesAsync(
+    internal async Task<int> CheckForUpdatesAsync(
         CancellationToken cancellationToken) {
         _state ??= await ReadStateAsync(cancellationToken);
         await SavePendingStateAsync(cancellationToken);
@@ -179,10 +181,10 @@ internal sealed class FrenchBreachesFeedTracker(HttpClient httpClient, string st
             };
             _stateNeedsSave = true;
             await SavePendingStateAsync(cancellationToken);
-            return;
+            return 0;
         }
 
-        bool changed = false;
+        int queuedCount = 0;
         foreach (FrenchBreachesItem item in items
             .OrderBy(item => item.PublishedAt ?? DateTimeOffset.MinValue)
             .ThenBy(item => item.Id, StringComparer.Ordinal)) {
@@ -191,14 +193,15 @@ internal sealed class FrenchBreachesFeedTracker(HttpClient httpClient, string st
 
             _state.SeenIds.Add(item.Id);
             _state.PendingItems.Add(item);
-            changed = true;
+            queuedCount++;
         }
 
-        if (changed) {
+        if (queuedCount > 0) {
             _stateNeedsSave = true;
             await SavePendingStateAsync(cancellationToken);
-            Logger.LogInformation("Queued {ItemCount} new FrenchBreaches entries for the daily digest", _state.PendingItems.Count);
         }
+
+        return queuedCount;
     }
 
     internal async Task SendDailyDigestIfDueAsync(
